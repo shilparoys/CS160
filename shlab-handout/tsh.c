@@ -165,6 +165,90 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+    //creating the argument vector
+    //contins the arguments passed in through via command line
+    char * argv [MAXARGS];
+
+	//whatJob = 1 it is BG
+	//whatJob = 0 it is FG
+	int whatjob = parseline(cmdline, argv);	
+	
+	//check for input
+	if(argv[0] == NULL){
+		return;
+	}
+
+	//represents a sginal set	
+	sigset_t signal;
+	int error;
+	pid_t pid;
+	
+	//checking for built-in command
+	//0 not built-in
+	if(!builtin_cmd(argv)){
+		
+		//initialises the signal set
+		error = sigemptyset(&signal);
+		if(error != 0){
+			fprintf(stderr, "sigemptyset\n");
+		}
+		//addes SIGCHLD to the signal set
+		error = sigaddset(&signal, SIGCHLD);
+		if(error != 0){
+			fprintf(stderr, "sigaddset\n");
+		}
+		
+		//blocks these signal from parent thread
+		error = sigprocmask(SIG_BLOCK, & signal, NULL);
+		if(error != 0){
+			fprintf(stderr, "sigprocmask\n");
+		}
+		
+		pid = fork();
+		if(pid < 0){
+			fprintf(stderr, "fork failed\n");
+		}
+
+		//child
+		if(pid == 0){
+			//creates the child process group
+			error = setpgid(0,0);
+			if( error != 0){
+				fprintf(stderr, "setpgid\n");
+			}
+			//unlocks the set in child
+			error = sigprocmask(SIG_UNBLOCK, & signal, NULL);
+			if(error != 0){
+				fprintf(stderr, "sigprocmask\n");
+			}
+			//execuite
+			if(execvp(argv[0], argv) < 0){
+				printf("%s: Command not found.\n", argv[0]);
+				exit(0);
+			}
+		}
+		else{
+			//parent
+			//is it a background or foreground job
+			if(whatjob){
+				addjob(jobs, pid, BG, cmdline);
+				printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
+			}
+			else{
+				addjob(jobs, pid, FG, cmdline);
+			}
+
+			error = sigprocmask(SIG_UNBLOCK, & signal, NULL);
+			if(error != 0){
+				fprintf(stderr, "sigprocmask\n");
+			}
+
+			//wait 
+			if(!whatjob){
+				waitfg(pid);
+			}
+		}
+	}	
     return;
 }
 
@@ -273,6 +357,13 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+	pid_t currentPid = fgpid(jobs);
+
+	if(currentPid != 0){
+		kill(-currentPid, SIGINT);
+		deletejob(jobs, currentPid);
+		printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(currentPid), currentPid, sig);
+	}
     return;
 }
 
@@ -283,6 +374,15 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+	pid_t currentPid = fgpid(jobs);
+	struct job_t * job;
+
+	if(currentPid != 0){
+		job = getjobpid(jobs, currentPid);
+		job->state = ST;
+		kill(-currentPid, SIGTSTP);
+		printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(currentPid), currentPid, sig);
+	}
     return;
 }
 
