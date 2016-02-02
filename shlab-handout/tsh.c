@@ -1,7 +1,7 @@
-/* Shilpa Chirackel & 861060176 
+/* 
  * tsh - A tiny shell program with job control
  * 
- * <Put your name and ID here>
+ * Shilpa Chirackel & 861060176
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -312,10 +312,32 @@ int parseline(const char *cmdline, char **argv)
 /* 
  * builtin_cmd - If the user has typed a built-in command then execute
  *    it immediately.  
+ * the builtin_cmd include quit, jobs, bg <job>, and fg <job>
  */
 int builtin_cmd(char **argv) 
 {
-    return 0;     /* not a builtin command */
+	//quit
+	if( !strcmp(argv[0], "quit")){
+		exit(0);
+	}
+	//jobs
+	else if (!strcmp(argv[0], "jobs")){
+		listjobs(jobs);
+		return 1;
+	}
+	//bg
+	else if(!strcmp(argv[0], "bg")){
+		do_bgfg(argv);
+		return 1;
+	}
+	//fg
+	else if(!strcmp(argv[0], "fg")){
+		do_bgfg(argv);
+		return 1;
+	}
+	else{
+    		return 0;     /* not a builtin command */
+	}
 }
 
 /* 
@@ -323,6 +345,43 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+	char *argument = argv[1];
+	if(argument == NULL){
+		printf("%s command requires PID or %%jobid argument\n", argv[0]);
+	}		
+    struct job_t *job;
+	int jid;
+	pid_t pid;
+	if(strcmp(argument, "%")){
+		jid = atoi(&argument[1]);
+		if(!(job = getjobjid(jobs, jid))){
+			printf("%d: No such job\n", jid);
+			return;
+		}
+	}
+	else{
+		 pid = atoi(argument);
+		if(!(job = getjobjid(jobs, pid))){
+			printf("(%d): No such process\n", pid);
+			return;
+		}
+	}
+	if(kill(-(job->pid), SIGCONT) < 0){
+			printf( "Error with SIGCONT\n");
+			return;
+	}
+
+	if(!strcmp(argv[0], "fg")){
+		job->state = FG;
+		waitfg(job->pid);
+	}
+	else if(!strcmp(argv[0], "bg")){
+		printf("[%d](%d) %s", job->jid, job->pid, job->cmdline);
+		job->state = BG;
+	}
+	else{
+		printf("Error with bg or fg\n");	
+	}
     return;
 }
 
@@ -331,6 +390,9 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+	while (pid == fgpid(jobs)){
+		sleep(0);
+	}
     return;
 }
 
@@ -347,6 +409,26 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
+	int status;
+	pid_t pid;
+	struct job_t *job;
+
+	while ((pid = waitpid(-1, & status, WNOHANG|WUNTRACED)) > 0){
+		if(WIFEXITED(status)){
+			deletejob(jobs, pid);
+		}
+		else if(WIFSIGNALED(status)){
+			printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(fgpid(jobs)), fgpid(jobs), 2);
+			deletejob(jobs, pid);
+		}
+		else if(WIFSTOPPED(status)){
+			job = getjobpid(jobs, pid);
+			if(job->state != ST){
+				printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, 20);
+				job->state = ST;
+			}
+		}
+	}
     return;
 }
 
