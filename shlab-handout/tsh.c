@@ -418,7 +418,7 @@ void sigchld_handler(int sig)
 			deletejob(jobs, pid);
 		}
 		else if(WIFSIGNALED(status)){
-			printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(fgpid(jobs)), fgpid(jobs), 2);
+			printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(fgpid(jobs)), pid, 2);
 			deletejob(jobs, pid);
 		}
 		else if(WIFSTOPPED(status)){
