@@ -178,7 +178,7 @@ void eval(char *cmdline)
 		return;
 	}
 
-	//represents a sginal set	
+	//represents a signal set used for blocking signal	
 	sigset_t signal;
 	int error;
 	pid_t pid;
@@ -210,7 +210,7 @@ void eval(char *cmdline)
 		}
 
 		//child
-		if(pid == 0){
+		else if(pid == 0){
 			//creates the child process group
 			error = setpgid(0,0);
 			if( error != 0){
@@ -348,6 +348,7 @@ void do_bgfg(char **argv)
 	char *argument = argv[1];
 	if(argument == NULL){
 		printf("%s command requires PID or %%jobid argument\n", argv[0]);
+        return;
 	}		
     struct job_t *job;
 	int jid;
@@ -367,7 +368,7 @@ void do_bgfg(char **argv)
 		}
 	}
 	if(kill(-(job->pid), SIGCONT) < 0){
-			printf( "Error with SIGCONT\n");
+		    fprintf(stderr, "Error with SIGCONT\n");
 			return;
 	}
 
@@ -380,7 +381,7 @@ void do_bgfg(char **argv)
 		job->state = BG;
 	}
 	else{
-		printf("Error with bg or fg\n");	
+		fprintf(stderr, "Error with bg or fg\n");	
 	}
     return;
 }
